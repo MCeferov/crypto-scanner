@@ -1,0 +1,120 @@
+You are improving an existing real-time trading heatmap web app.
+
+IMPORTANT RULE:
+Do NOT change or break any existing functionality, data flow, APIs, or realtime behavior. Only refactor, simplify UI, and clean indicator usage.
+
+---
+
+## 🎯 GOAL
+Make the UI cleaner, less noisy, and more readable while keeping all core logic intact.
+
+---
+
+## 📊 INDICATOR SIMPLIFICATION (CRITICAL)
+
+Keep ONLY these indicators:
+
+1. RSI
+2. MACD
+3. Volume
+4. ATR
+5. Stochastic RSI
+6. SuperTrend
+7. Bollinger Bands
+
+AI analysis and Trend Score MUST remain unchanged.
+
+---
+
+## ❌ REMOVE / AVOID
+- Any extra indicators outside the list above
+- Duplicated momentum signals displayed separately
+- Overlapping visual representations of the same logic
+- Too many colors or gradients in heatmap
+- Excessive panels or charts
+
+---
+
+## 🎨 UI SIMPLIFICATION RULES
+
+Redesign UI to be:
+
+- Minimal and calm (low visual noise)
+- Dark mode friendly with soft contrast
+- Reduced number of cards/panels
+- Clear hierarchy:
+  1. Trend Score (top priority)
+  2. AI Analysis (short, compact)
+  3. Heatmap (main view)
+  4. Indicators (collapsed or grouped)
+
+---
+
+## 🧠 AI ANALYSIS PANEL
+
+Keep AI module but improve output format:
+
+- Max 3–5 lines
+- Focus on:
+  - Trend strength
+  - Risk level
+  - Momentum alignment
+- No long paragraphs
+
+Example style:
+- Trend: Strong bullish
+- Momentum: Neutral
+- Risk: Medium due to volume divergence
+
+---
+
+## 📊 HEATMAP IMPROVEMENTS
+
+- Reduce color intensity noise
+- Use only:
+  - Green = bullish pressure
+  - Red = bearish pressure
+  - Gray = neutral
+- Remove unnecessary micro-gradients
+- Improve readability over decoration
+
+---
+
+## 📈 TREND SCORE
+
+Keep existing logic exactly the same.
+
+Only UI improvement:
+- Display as single large number
+- Add label: "Trend Score"
+- Add color threshold:
+  - 0–40 = bearish (red)
+  - 40–60 = neutral (gray)
+  - 60–100 = bullish (green)
+
+---
+
+## ⚙️ ARCHITECTURE RULE
+
+DO NOT:
+- Change APIs
+- Change websocket logic
+- Change data sources
+- Change indicator calculations
+- Break realtime updates
+
+ONLY:
+- Refactor UI
+- Remove visual clutter
+- Group indicators
+- Simplify layout
+
+---
+
+## 🧩 FINAL OUTPUT
+
+Return improved code with:
+- Cleaner component structure
+- Reduced UI complexity
+- Same functionality
+- Better readability
