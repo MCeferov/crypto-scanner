@@ -187,6 +187,13 @@ export function analyzeFromKlines(klines: Kline[], price: number, change24h: num
     setupSignal: 'NEUTRAL', setupLabel: '—', setupReasons: [], setupConviction: 0,
     mtf15m: 'NEUTRAL', mtf30m: 'NEUTRAL', mtf1h: 'NEUTRAL', mtf4h: 'NEUTRAL',
     chartSignal: 'NEUTRAL', chartSignalReasons: [],
+    researchSignal: 'NEUTRAL', researchLabel: '—', researchScore: 0, researchReasons: [],
+    reversalRisk: 'NONE', reversalReasons: [], mtfAlignment: 'MIXED', riskRewardNote: '',
+    primaryAnalysisTf: '1h',
+    mtf15mCandles: 0, mtf30mCandles: 0, mtf1hCandles: 0, mtf4hCandles: 0,
+    macdCandles: 0, stCandles: 0, stochCandles: 0, haCandles: 0,
+    chartCandles: 0, aiCandles: 0, zoneCandles: 0, setupCandles: 0, rsiCandles: 0,
+    syncStatus: 'WEAK' as const, syncScore: 0, syncLeader: '—', syncLeaderId: '', syncLeaderCandles: 0, syncReasons: [],
     indicatorsLoaded: true,
   };
 
