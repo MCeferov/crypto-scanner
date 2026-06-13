@@ -10,6 +10,7 @@
     "db:generate": "pnpm --filter @workspace/prisma run generate",
     "db:migrate": "pnpm --filter @workspace/prisma run migrate:deploy",
     "db:push": "pnpm --filter @workspace/prisma run db:push",
+    "db:test": "pnpm --filter @workspace/prisma run db:test",
     "dev:api": "pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/api-server run start",
     "dev:web": "pnpm --filter @workspace/crypto-heatmap run dev"
   },

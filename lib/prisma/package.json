@@ -11,13 +11,16 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "db:push": "prisma db push",
+    "db:test": "tsx ./scripts/test-connection.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.0"
+    "@prisma/client": "^6.19.0",
+    "dotenv": "^16.6.1"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "prisma": "^6.19.0"
+    "prisma": "^6.19.0",
+    "tsx": "catalog:"
   }
 }
