@@ -4,14 +4,15 @@
   "license": "MIT",
   "scripts": {
     "preinstall": "node -e \"const ua=process.env.npm_config_user_agent||'';if(!ua.startsWith('pnpm/')){console.error('Use pnpm instead');process.exit(1)};const fs=require('fs');for(const f of['package-lock.json','yarn.lock']){try{fs.unlinkSync(f)}catch{}}\"",
-    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "build:libs": "pnpm --filter @workspace/market-data run build",
+    "build": "pnpm run build:libs && pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "db:generate": "pnpm --filter @workspace/prisma run generate",
     "db:migrate": "pnpm --filter @workspace/prisma run migrate:deploy",
     "db:push": "pnpm --filter @workspace/prisma run db:push",
     "db:test": "pnpm --filter @workspace/prisma run db:test",
-    "dev:api": "pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/api-server run start",
+    "dev:api": "pnpm --filter @workspace/market-data run build && pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/api-server run start",
     "dev:web": "pnpm --filter @workspace/crypto-heatmap run dev"
   },
   "private": true,
