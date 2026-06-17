@@ -1,17 +1,31 @@
 import React from 'react';
 import { useTradingChart } from '../../hooks/useTradingChart';
 import { ChartToolbar } from './ChartToolbar';
+import type { ChartAsset, ChartTimeframe } from '../../types/chart';
+import type { AssetType } from '../../types/asset';
+import type { Kline } from '../../services/binanceApi';
 
 interface TradingChartProps {
   symbol: string;
+  type?: AssetType;
+  initialTimeframe?: ChartTimeframe;
+  onKlinesLoaded?: (interval: string, klines: Kline[]) => void;
 }
 
-export function TradingChart({ symbol }: TradingChartProps) {
+export function TradingChart({
+  symbol,
+  type = 'crypto',
+  initialTimeframe = '1h',
+  onKlinesLoaded,
+}: TradingChartProps) {
+  const asset: ChartAsset = { symbol, type };
   const {
     containerRef,
     timeframe, setTimeframe, settings, toggleIndicator, togglePanel, updateSettings,
     loading, error,
-  } = useTradingChart(symbol);
+  } = useTradingChart(asset, initialTimeframe, onKlinesLoaded);
+
+  const sourceLabel = type === 'crypto' ? 'Binance real-time data' : 'Yahoo Finance data';
 
   return (
     <div
@@ -59,7 +73,7 @@ export function TradingChart({ symbol }: TradingChartProps) {
         >
           TradingView
         </a>
-        {' '}· Binance real-time data
+        {' '}· {sourceLabel}
       </div>
     </div>
   );

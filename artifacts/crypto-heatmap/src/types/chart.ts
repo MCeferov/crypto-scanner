@@ -1,4 +1,11 @@
+import type { AssetType } from './asset';
+
 export type ChartTimeframe = '1m' | '5m' | '15m' | '1h' | '4h' | '1d' | '1w';
+
+export interface ChartAsset {
+  symbol: string;
+  type: AssetType;
+}
 
 export const CHART_TIMEFRAMES: { key: ChartTimeframe; label: string; binance: string }[] = [
   { key: '1m', label: '1m', binance: '1m' },
@@ -16,14 +23,12 @@ export type IndicatorKey =
   | 'superTrend'
   | 'rsi'
   | 'macd'
-  | 'atr'
   | 'stochRsi';
 
 export interface IndicatorSettings {
   rsi: { period: number; enabled: boolean; panel: boolean };
   macd: { fast: number; slow: number; signal: number; enabled: boolean; panel: boolean };
   volume: { enabled: boolean };
-  atr: { period: number; enabled: boolean };
   stochRsi: { rsiPeriod: number; stochPeriod: number; kSmooth: number; dSmooth: number; enabled: boolean; panel: boolean };
   superTrend: { period: number; multiplier: number; enabled: boolean };
   bollingerBands: { period: number; stdDev: number; enabled: boolean };
@@ -33,7 +38,6 @@ export const DEFAULT_INDICATOR_SETTINGS: IndicatorSettings = {
   rsi: { period: 14, enabled: true, panel: true },
   macd: { fast: 12, slow: 26, signal: 9, enabled: true, panel: true },
   volume: { enabled: true },
-  atr: { period: 14, enabled: false },
   stochRsi: { rsiPeriod: 14, stochPeriod: 14, kSmooth: 3, dSmooth: 3, enabled: true, panel: true },
   superTrend: { period: 10, multiplier: 3, enabled: true },
   bollingerBands: { period: 20, stdDev: 2, enabled: true },
