@@ -1,0 +1,30 @@
+# API-only deploy on Railway. The frontend is hosted separately (Netlify —
+# see netlify.toml); set CORS_ORIGIN to that origin or the server refuses to
+# boot. To serve both from Railway instead, use `pnpm run build:deploy` as the
+# build command and drop CORS_ORIGIN — app.ts auto-detects the built SPA.
+#
+# TWO THINGS THIS FILE CANNOT SET — do them in the dashboard:
+#   1. Region must be europe-west4 (Amsterdam) or any EU region. Railway
+#      defaults to us-west1, and Binance answers HTTP 451 to US IPs, which
+#      breaks the entire market data pipeline.
+#   2. DATABASE_URL and JWT_SECRET (>=32 chars). The server exits at boot
+#      without either.
+
+[build]
+  # --prod=false is mandatory: NODE_ENV=production is set on the service, and
+  # the build toolchain (typescript, esbuild) lives in devDependencies.
+  buildCommand = "pnpm install --frozen-lockfile --prod=false && pnpm run build:api"
+
+[deploy]
+  # Migrations belong here, not in the build: this runs once per deploy with the
+  # runtime variables, and a failure here aborts the rollout instead of shipping
+  # a server whose schema does not match. `prisma migrate deploy` is idempotent.
+  preDeployCommand = "pnpm run db:migrate"
+  startCommand = "pnpm run start"
+  healthcheckPath = "/api/healthz"
+  healthcheckTimeout = 300
+  restartPolicyType = "ON_FAILURE"
+  # Single replica, deliberately. The kline cache, Binance proxy cache and
+  # rate-limit buckets are all in-process — a second replica would double the
+  # Binance traffic and split the rate-limit accounting.
+  numReplicas = 1

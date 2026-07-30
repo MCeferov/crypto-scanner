@@ -53,7 +53,8 @@
       "Bash(unset NODE_ENV)",
       "Bash(node \"C:/Users/Miri/AppData/Local/Temp/claude/c--Users-Miri-Desktop-Crypto-Heatmap/207f7aa8-e20c-4912-b26e-532b5846e6f5/scratchpad/probe.mjs\")",
       "Bash(grep -rn \"from \\\\\"./app\\\\\"\\\\|from '\\\\\\\\./app'\\\\|require\\(.*app\\\\\"\\)\\\\|api-server/src/app\\\\|dist/index.mjs\\\\|dist/app\" --include=\"*.ts\" --include=\"*.mjs\" --include=\"*.js\" --include=\"*.json\" . --exclude-dir=node_modules --exclude-dir=.git)",
-      "PowerShell(pnpm run build:web 2>&1)"
+      "PowerShell(pnpm run build:web 2>&1)",
+      "PowerShell(pnpm run build:api 2>&1)"
     ]
   }
 }

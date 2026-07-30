@@ -1,8 +1,13 @@
 # Deployment
 
-Two supported topologies. **Option A is recommended** — it is simpler, avoids
-CORS entirely, and keeps the SSE kline stream on a direct browser↔API
-connection with no third-party edge in the middle.
+Supported topologies. **Option A is recommended** — it is simpler, avoids CORS
+entirely, and keeps the SSE kline stream on a direct browser↔API connection with
+no third-party edge in the middle. Options B and C split the frontend onto a CDN;
+Option D swaps Render for Railway on the API side and applies to any of them.
+
+Whatever the split, the API must run as a persistent process in an EU region.
+Those two constraints are what rule most platforms out — see "Things that will
+bite you".
 
 ---
 
@@ -110,6 +115,57 @@ the browser straight at the API host with `VITE_API_URL`.
 
 ---
 
+## Option D — Railway for the API
+
+Railway can replace Render for the API in either Option A (single service) or
+Options B/C (API only). It is a persistent container, not serverless, so the
+in-process caches and the SSE stream work exactly as they do on Render.
+
+Why prefer it over Render's free tier: Railway containers do not sleep. On
+Render free, every 15-minute idle period costs a 30–60 s cold start *and* a full
+kline refetch, because the cache dies with the process. The tradeoff is money —
+Railway has no permanent free tier, so budget for the Hobby plan; check the
+current pricing page rather than trusting this line.
+
+`railway.toml` in the repo root encodes the build, the migration pre-deploy step,
+the start command, the healthcheck and the single-replica constraint. Two things
+it cannot set — do them in the dashboard:
+
+1. **Region → `europe-west4`** (or any EU region). Railway defaults to
+   `us-west1`, and Binance answers HTTP 451 to US IPs. A US region breaks the
+   entire market pipeline, and the failure looks like empty data rather than a
+   crash.
+2. `DATABASE_URL` and `JWT_SECRET` (≥32 chars). Unlike Render, Railway does not
+   generate secrets from a blueprint — generate the JWT secret yourself, e.g.
+   `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+
+Also set, in the service variables:
+
+```
+NODE_ENV        = production
+CORS_ORIGIN     = https://<your-site>.netlify.app
+BINANCE_API_BASE = https://data-api.binance.vision/api/v3
+```
+
+`PORT` is injected by Railway and already honored in production
+(`artifacts/api-server/src/index.ts`). The graceful SIGTERM shutdown the server
+implements is what Railway sends on redeploy, so in-flight SSE streams close
+cleanly.
+
+For the database, Railway's own Postgres in the same EU region avoids Neon's
+free-tier autosuspend and the cross-provider hop. Neon works fine either way —
+just keep it in an EU region.
+
+To serve the frontend from Railway too (single service, no CORS, no Netlify),
+change the build command in `railway.toml` to `pnpm run build:deploy` and remove
+`CORS_ORIGIN`. `app.ts` detects the built SPA and serves it automatically.
+
+**Do not raise the replica count.** The kline cache, Binance proxy cache and
+rate-limit buckets are per-process; a second replica doubles the Binance traffic
+and splits the rate-limit accounting.
+
+---
+
 ## Environment variables
 
 | Variable | Required | Notes |
@@ -120,10 +176,10 @@ the browser straight at the API host with `VITE_API_URL`.
 | `PORT` | auto | Injected by the platform; honored only in production. |
 | `API_PORT` | no | Overrides `PORT`. Used locally. |
 | `JWT_EXPIRES_IN` | no | Defaults to `7d`. |
-| `CORS_ORIGIN` | Options B/C | Comma-separated origins. |
+| `CORS_ORIGIN` | separate frontend host | Comma-separated origins. |
 | `BINANCE_API_BASE` | recommended | See the Binance note below. |
 | `REDIS_URL` | no | Falls back to an in-process memory cache. |
-| `VITE_API_URL` | Options B/C | Frontend build-time only. |
+| `VITE_API_URL` | separate frontend host | Frontend build-time only. |
 | `STATIC_DIR` | no | Override the SPA path; defaults to the build output. |
 
 ---
@@ -140,7 +196,7 @@ market-data host, which tolerates datacenter IPs far better than
 **Render's free tier sleeps** after 15 minutes of inactivity; the next request
 pays a 30–60 s cold start. The first load after a cold start also refetches all
 klines because the cache is in-process. Acceptable for a private tool, not for
-public traffic.
+public traffic — Railway (Option D) is the paid way out.
 
 **Do not run this API on serverless** (Vercel Functions, Netlify Functions, Lambda). The kline
 cache, the Binance proxy cache and the rate-limit buckets are all in-process,
