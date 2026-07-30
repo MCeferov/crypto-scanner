@@ -75,6 +75,41 @@ frontend itself — that guard is intentional.
 
 ---
 
+## Option C — Netlify (frontend) + Render (API)
+
+Same shape as Option B, with Netlify instead of Vercel. `netlify.toml` in the
+repo root encodes the build.
+
+| Setting | Value |
+|---|---|
+| Build command | `pnpm run build:web` (from `netlify.toml`) |
+| Publish directory | `artifacts/crypto-heatmap/dist/public` |
+| Base directory | leave empty — the build runs from the repo root |
+
+Add one **build-time** environment variable in Netlify → Site configuration →
+Environment variables, then trigger a redeploy (it is baked into the bundle):
+
+```
+VITE_API_URL = https://<your-api>.onrender.com
+```
+
+On the Render API set `CORS_ORIGIN = https://<your-site>.netlify.app`.
+
+Two things in `netlify.toml` are load-bearing:
+
+- The `/*` → `/index.html` 200 redirect. Without it every route except `/` is a
+  Netlify **"Page not found"**, because no file exists on disk for it — wouter
+  routes client-side. A deploy with no `netlify.toml` at all 404s even on `/`,
+  since Netlify then publishes the repo root, which has no `index.html`.
+- `PNPM_FLAGS = "--frozen-lockfile --prod=false"`. The frontend's build
+  toolchain (react, vite, tailwind) lives in `devDependencies`.
+
+Do **not** proxy `/api/*` through a Netlify redirect. The edge buffers the SSE
+kline stream, so the heatmap stalls instead of filling in progressively. Point
+the browser straight at the API host with `VITE_API_URL`.
+
+---
+
 ## Environment variables
 
 | Variable | Required | Notes |
@@ -85,10 +120,10 @@ frontend itself — that guard is intentional.
 | `PORT` | auto | Injected by the platform; honored only in production. |
 | `API_PORT` | no | Overrides `PORT`. Used locally. |
 | `JWT_EXPIRES_IN` | no | Defaults to `7d`. |
-| `CORS_ORIGIN` | Option B only | Comma-separated origins. |
+| `CORS_ORIGIN` | Options B/C | Comma-separated origins. |
 | `BINANCE_API_BASE` | recommended | See the Binance note below. |
 | `REDIS_URL` | no | Falls back to an in-process memory cache. |
-| `VITE_API_URL` | Option B only | Frontend build-time only. |
+| `VITE_API_URL` | Options B/C | Frontend build-time only. |
 | `STATIC_DIR` | no | Override the SPA path; defaults to the build output. |
 
 ---
@@ -107,7 +142,7 @@ pays a 30–60 s cold start. The first load after a cold start also refetches al
 klines because the cache is in-process. Acceptable for a private tool, not for
 public traffic.
 
-**Do not run this API on serverless** (Vercel Functions, Lambda). The kline
+**Do not run this API on serverless** (Vercel Functions, Netlify Functions, Lambda). The kline
 cache, the Binance proxy cache and the rate-limit buckets are all in-process,
 and the SSE stream runs for 30–40 s on a cold cache. Serverless would refetch
 from Binance on every cold start and get the IP banned (HTTP 418).
