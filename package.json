@@ -16,6 +16,7 @@
     "db:migrate": "pnpm --filter @workspace/prisma run migrate:deploy",
     "db:push": "pnpm --filter @workspace/prisma run db:push",
     "db:test": "pnpm --filter @workspace/prisma run db:test",
+    "db:create-user": "pnpm --filter @workspace/api-server run create-user",
     "dev:api": "pnpm --filter @workspace/market-data run build && pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/api-server run start",
     "dev:web": "pnpm --filter @workspace/crypto-heatmap run dev",
     "build:web": "pnpm --filter @workspace/crypto-heatmap run build",
