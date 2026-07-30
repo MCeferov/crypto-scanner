@@ -5,7 +5,10 @@
     "outDir": "dist",
     "declaration": true,
     "declarationMap": true,
-    "composite": true
+    "composite": true,
+    // See the note in artifacts/api-server/tsconfig.json — this package also
+    // uses global fetch/Response and needs the same deterministic typing.
+    "lib": ["es2022", "dom"]
   },
   "include": ["src/**/*"]
 }

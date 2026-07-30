@@ -1,0 +1,45 @@
+# Single-service deploy: one Node process serves both /api and the built SPA.
+# No CORS, no proxy hop, and the SSE kline stream reaches the browser directly.
+#
+# Region is deliberately Frankfurt: Binance answers HTTP 451 to US IPs, so a
+# US region breaks the entire market data pipeline.
+services:
+  - type: web
+    name: market-scanner
+    runtime: node
+    region: frankfurt
+    plan: free
+    branch: main
+    # --prod=false is mandatory: NODE_ENV=production is set below, and the
+    # frontend's build toolchain (react, vite, tailwind) lives in
+    # devDependencies — skipping those breaks the web build.
+    buildCommand: corepack enable && corepack prepare --activate && pnpm install --frozen-lockfile --prod=false && pnpm run build:deploy
+    startCommand: pnpm run start
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+
+      # Postgres connection string from Neon / Supabase. Set in the dashboard —
+      # never commit it.
+      - key: DATABASE_URL
+        sync: false
+
+      # Generated once by Render and kept across deploys. Rotating it logs
+      # every user out, which is fine and expected.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+
+      # Official public market-data host — tolerates datacenter IPs far better
+      # than api.binance.com. This app only calls public endpoints.
+      - key: BINANCE_API_BASE
+        value: https://data-api.binance.vision/api/v3
+
+      # Optional: an Upstash Redis URL. Without it the service falls back to an
+      # in-process memory cache, which is fine for a single free instance.
+      # - key: REDIS_URL
+      #   sync: false

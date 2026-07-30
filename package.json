@@ -2,6 +2,10 @@
   "name": "workspace",
   "version": "0.0.0",
   "license": "MIT",
+  "packageManager": "pnpm@11.5.2",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "preinstall": "node -e \"const ua=process.env.npm_config_user_agent||'';if(!ua.startsWith('pnpm/')){console.error('Use pnpm instead');process.exit(1)};const fs=require('fs');for(const f of['package-lock.json','yarn.lock']){try{fs.unlinkSync(f)}catch{}}\"",
     "build:libs": "pnpm --filter @workspace/market-data run build",
@@ -13,7 +17,11 @@
     "db:push": "pnpm --filter @workspace/prisma run db:push",
     "db:test": "pnpm --filter @workspace/prisma run db:test",
     "dev:api": "pnpm --filter @workspace/market-data run build && pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/api-server run start",
-    "dev:web": "pnpm --filter @workspace/crypto-heatmap run dev"
+    "dev:web": "pnpm --filter @workspace/crypto-heatmap run dev",
+    "build:web": "pnpm --filter @workspace/crypto-heatmap run build",
+    "build:api": "pnpm --filter @workspace/market-data run build && pnpm --filter @workspace/api-server run build",
+    "build:deploy": "pnpm run build:api && pnpm run build:web && pnpm run db:migrate",
+    "start": "node --enable-source-maps artifacts/api-server/dist/index.mjs"
   },
   "private": true,
   "devDependencies": {
