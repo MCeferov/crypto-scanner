@@ -1,12 +1,13 @@
 import React, { memo, useCallback } from 'react';
+import { Star } from 'lucide-react';
 import { useLocation } from 'wouter';
 import type { CoinData, RsiTf, ExtraCol, AnalysisTf } from '../../context/MarketContext';
 import { RSICell } from './RSICell';
 import { CandleAge } from './CandleAge';
 import {
-  formatPrice, formatPercent, formatAssetPrice,
+  formatPrice, formatPercent, formatVolume, formatAssetPrice,
   classifySignal, classifyZoneBreakout, classifyHaTrend,
-  zoneBreakoutLabel, zonePositionLabel, haTrendLabel,
+  zoneBreakoutLabel, haTrendLabel,
   mtfDirShort, classifyMtfDir, chartSignalLabel, classifyResearchSignal,
 } from '../../utils/formatters';
 import { TYPE_COLORS } from '../../types/asset';
@@ -16,14 +17,16 @@ import { getTrendScoreColor } from '../../utils/colors';
 import { classifyVolume } from '../../indicators/volumeConfirmation';
 
 const MTF_COLS: { id: string; key: keyof CoinData; ageKey: keyof CoinData; label: string; tf: AnalysisTf }[] = [
-  { id: 'mtf15', key: 'mtf15m', ageKey: 'mtf15mCandles', label: '15m', tf: '15m' },
-  { id: 'mtf30', key: 'mtf30m', ageKey: 'mtf30mCandles', label: '30m', tf: '30m' },
-  { id: 'mtf1h', key: 'mtf1h',  ageKey: 'mtf1hCandles',  label: '1H',  tf: '1h' },
-  { id: 'mtf4h', key: 'mtf4h',  ageKey: 'mtf4hCandles',  label: '4H',  tf: '4h' },
+  { id: 'mtf1m',  key: 'mtf1m',  ageKey: 'mtf1mCandles',  label: '1m',  tf: '1m' },
+  { id: 'mtf5m',  key: 'mtf5m',  ageKey: 'mtf5mCandles',  label: '5m',  tf: '5m' },
+  { id: 'mtf15',  key: 'mtf15m', ageKey: 'mtf15mCandles', label: '15m', tf: '15m' },
+  { id: 'mtf30',  key: 'mtf30m', ageKey: 'mtf30mCandles', label: '30m', tf: '30m' },
+  { id: 'mtf1h',  key: 'mtf1h',  ageKey: 'mtf1hCandles',  label: '1H',  tf: '1h' },
+  { id: 'mtf4h',  key: 'mtf4h',  ageKey: 'mtf4hCandles',  label: '4H',  tf: '4h' },
 ];
 
 const RSI_KEY: Record<RsiTf, keyof CoinData> = {
-  '15m': 'rsi15m', '1h': 'rsi1h', '4h': 'rsi4h', '1d': 'rsi1d',
+  '1m': 'rsi1m', '5m': 'rsi5m', '15m': 'rsi15m', '1h': 'rsi1h', '4h': 'rsi4h', '1d': 'rsi1d',
 };
 
 interface HeatmapRowProps {
@@ -33,6 +36,9 @@ interface HeatmapRowProps {
   visibleExtraCols: ExtraCol[];
   visibleAnalysisTfs: AnalysisTf[];
   visibleColIds: string[];
+  rowHeight: number;
+  isFavorite: boolean;
+  onToggleFavorite: (id: string) => void;
 }
 
 function SkeletonCell({ w = 40 }: { w?: number }) {
@@ -43,7 +49,9 @@ function SkeletonCell({ w = 40 }: { w?: number }) {
   );
 }
 
-function VolumeConfirmCell({ colId, coin, loaded, activeRsiTf, t }: {
+function VolumeConfirmCell({
+  colId, coin, loaded, activeRsiTf, t,
+}: {
   colId: string;
   coin: CoinData;
   loaded: boolean;
@@ -52,37 +60,35 @@ function VolumeConfirmCell({ colId, coin, loaded, activeRsiTf, t }: {
 }) {
   if (!loaded) return <SkeletonCell key={colId} w={44} />;
 
-  const rsiValue = coin[RSI_KEY[activeRsiTf]] as number | null;
-  const { status: volumeConfirm, reason: volumeConfirmReason } = classifyVolume(
+  const { status, reason, buyPct } = classifyVolume(
     activeRsiTf,
-    rsiValue,
     coin.volBuyRatios[activeRsiTf],
   );
 
-  if (volumeConfirm === 'neutral') {
+  if (status === 'neutral') {
     return (
       <td key={colId} className="px-2 py-2 text-center" style={{ minWidth: 76 }}>
         <span
-          className="inline-block rounded px-2 py-0.5 text-[10px] font-semibold"
-          title={volumeConfirmReason}
+          className="inline-block rounded px-2 py-0.5 text-[10px] font-semibold font-mono"
+          title={reason}
           style={{ color: 'var(--muted)', background: 'var(--elevated)', border: '1px solid var(--border)' }}
         >
-          {t('table.volumeNeutral')}
+          {buyPct != null ? `${buyPct}%` : t('table.volumeNeutral')}
         </span>
       </td>
     );
   }
 
-  if (volumeConfirm === 'nodata') {
+  if (status === 'nodata') {
     return (
       <td key={colId} className="px-2 py-2 text-center" style={{ minWidth: 76 }}>
         <span
           className="inline-block rounded px-2 py-0.5 text-[10px] font-bold"
-          title={volumeConfirmReason}
+          title={reason}
           style={{
-            color: '#f0b90b',
-            background: 'rgba(240,185,11,.08)',
-            border: '1px dashed rgba(240,185,11,.45)',
+            color: '#f3a52f',
+            background: 'rgba(243,165,47,.08)',
+            border: '1px dashed rgba(243,165,47,.45)',
           }}
         >
           {t('table.volumeNoData')}
@@ -91,12 +97,12 @@ function VolumeConfirmCell({ colId, coin, loaded, activeRsiTf, t }: {
     );
   }
 
-  const real = volumeConfirm === 'real';
+  const real = status === 'real';
   return (
     <td key={colId} className="px-2 py-2 text-center" style={{ minWidth: 76 }}>
       <span
-        className="inline-block font-bold rounded px-2 py-0.5 text-[10px] whitespace-nowrap"
-        title={volumeConfirmReason}
+        className="inline-block font-bold rounded px-2 py-0.5 text-[10px] whitespace-nowrap font-mono"
+        title={reason}
         style={{
           color: real ? '#26a69a' : '#ef5350',
           background: real ? 'rgba(38,166,154,.12)' : 'rgba(239,83,80,.12)',
@@ -104,22 +110,24 @@ function VolumeConfirmCell({ colId, coin, loaded, activeRsiTf, t }: {
         }}
       >
         {real ? t('table.volumeReal') : t('table.volumeFake')}
+        {buyPct != null ? ` ${buyPct}%` : ''}
       </span>
     </td>
   );
 }
 
 export const HeatmapRow = memo(function HeatmapRow({
-  coin, rank, visibleAnalysisTfs, visibleColIds,
+  coin, rank, visibleAnalysisTfs, visibleColIds, rowHeight, isFavorite, onToggleFavorite,
 }: HeatmapRowProps) {
   const [, setLocation] = useLocation();
   const t = useT();
-  const even = rank % 2 === 0;
-  const rowBg = even ? 'var(--bg)' : 'var(--surface)';
+  // Uniform surface + 1px separators (CSS) — zebra fought with hover/flash
+  // backgrounds and read as visual noise across 20+ columns.
+  const rowBg = 'var(--surface)';
   const flashClass = coin.flashUp ? 'flash-up' : coin.flashDown ? 'flash-down' : '';
   const loaded = coin.indicatorsLoaded;
   const typeStyle = TYPE_COLORS[coin.type];
-  const activeRsiTf = (visibleColIds.find(id => id.startsWith('rsi-'))?.slice(4) as RsiTf) ?? '1h';
+  const activeRsiTf = (visibleColIds.find(id => id.startsWith('rsi-'))?.slice(4) as RsiTf) ?? '1m';
 
   const handleClick = () => {
     if (isCryptoAsset(coin)) {
@@ -141,23 +149,37 @@ export const HeatmapRow = memo(function HeatmapRow({
     ...coin.reversalReasons,
     '---',
     ...coin.setupReasons,
-    coin.riskReward !== null ? `---\n${coin.riskRewardNote}` : '',
   ].filter(Boolean).join('\n');
 
   const renderCell = useCallback((colId: string): React.ReactNode => {
     switch (colId) {
+      case 'fav':
+        return (
+          <td key={colId} className="text-center sticky left-0 z-10" style={{ background: rowBg, minWidth: 30, width: 30, padding: 0 }}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onToggleFavorite(coin.id); }}
+              aria-label={isFavorite ? 'Remove from watchlist' : 'Add to watchlist'}
+              className="p-1.5 transition-colors hover:opacity-100"
+              style={{ color: isFavorite ? '#f3a52f' : 'var(--dim)', opacity: isFavorite ? 1 : 0.55 }}
+            >
+              <Star size={13} fill={isFavorite ? 'currentColor' : 'none'} />
+            </button>
+          </td>
+        );
+
       case 'rank':
         return (
-          <td key={colId} className="px-2 py-2 text-center sticky left-0 z-10" style={{ background: rowBg, minWidth: 38, width: 38 }}>
+          <td key={colId} className="px-2 py-2 text-center sticky z-10" style={{ background: rowBg, left: 30, minWidth: 38, width: 38 }}>
             <span className="text-[11px]" style={{ color: 'var(--dim)' }}>{rank}</span>
           </td>
         );
 
       case 'asset':
         return (
-          <td key={colId} className="px-3 py-2 sticky z-10" style={{ background: rowBg, left: 38, minWidth: 150, width: 150 }}>
+          <td key={colId} className="px-3 py-2 sticky z-10" style={{ background: rowBg, left: 68, minWidth: 150, width: 150 }}>
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 font-bold text-[9px]"
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 font-bold text-[10px]"
                 style={{ background: typeStyle.bg, color: typeStyle.text, border: `1px solid ${typeStyle.border}` }}>
                 {coin.baseAsset.slice(0, 3)}
               </div>
@@ -168,7 +190,7 @@ export const HeatmapRow = memo(function HeatmapRow({
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="text-[10px] truncate" style={{ color: 'var(--dim)' }}>{coin.name}</span>
                   <span
-                    className="text-[8px] px-1 py-px rounded font-semibold shrink-0"
+                    className="text-[10px] px-1 py-px rounded font-semibold shrink-0"
                     style={{ background: typeStyle.bg, color: typeStyle.text, border: `1px solid ${typeStyle.border}` }}
                   >
                     {t(`assetType.${coin.type}`)}
@@ -201,6 +223,14 @@ export const HeatmapRow = memo(function HeatmapRow({
         );
 
       case 'volume':
+        return (
+          <td key={colId} className="px-2 py-2 text-right" style={{ minWidth: 76 }}>
+            <span className="font-mono text-[11px]" style={{ color: 'var(--muted)' }}>
+              {formatVolume(coin.volume24h)}
+            </span>
+          </td>
+        );
+
       case 'vol24h':
         return <VolumeConfirmCell key={colId} colId={colId} coin={coin} loaded={loaded} activeRsiTf={activeRsiTf} t={t} />;
 
@@ -241,17 +271,6 @@ export const HeatmapRow = memo(function HeatmapRow({
           </td>
         );
 
-      case 'bb':
-        return !loaded ? <SkeletonCell key={colId} w={32} /> : (
-          <td key={colId} className="px-2 py-2 text-center" style={{ minWidth: 52 }}>
-            {coin.bbPercent !== null ? (
-              <span className="font-mono text-[11px]" style={{
-                color: coin.bbPercent > 0.8 ? '#ef5350' : coin.bbPercent < 0.2 ? '#26a69a' : 'var(--muted)',
-              }}>{(coin.bbPercent * 100).toFixed(0)}%</span>
-            ) : <span className="text-xs" style={{ color: 'var(--dim)' }}>—</span>}
-          </td>
-        );
-
       case 'trend':
         return !loaded ? <SkeletonCell key={colId} w={56} /> : (
           <td key={colId} className="px-3 py-2" style={{ minWidth: 80 }}>
@@ -262,7 +281,7 @@ export const HeatmapRow = memo(function HeatmapRow({
               <div className="flex-1 rounded-full overflow-hidden" style={{ height: 3, background: 'var(--border)' }}>
                 <div className="h-full rounded-full" style={{
                   width: `${coin.trendScore}%`,
-                  background: coin.trendScore >= 60 ? '#26a69a' : coin.trendScore >= 40 ? '#f0b90b' : '#ef5350',
+                  background: coin.trendScore >= 60 ? '#26a69a' : coin.trendScore >= 40 ? '#f3a52f' : '#ef5350',
                 }} />
               </div>
             </div>
@@ -283,7 +302,7 @@ export const HeatmapRow = memo(function HeatmapRow({
                 return (
                   <span
                     key={col.id}
-                    className={`inline-block font-bold rounded px-1 py-0.5 text-[9px] font-mono leading-none ${classifyMtfDir(dir)}`}
+                    className={`inline-block font-bold rounded px-1 py-0.5 text-[10px] font-mono leading-none ${classifyMtfDir(dir)}`}
                     title={`${col.label}: ${dir}${candles ? ` — ${candles} şam` : ''}`}
                   >
                     {col.label.replace('m', '')}{mtfDirShort(dir)}
@@ -341,25 +360,25 @@ export const HeatmapRow = memo(function HeatmapRow({
         );
 
       case 'zone':
-        return !loaded ? <SkeletonCell key={colId} w={28} /> : (
-          <td key={colId} className="px-2 py-2 text-center" style={{ minWidth: 44 }}>
-            <span className="inline-block font-bold rounded px-1.5 py-0.5 text-[10px]"
-              title={coin.zoneSignalReasons.join(' · ') || 'No zone data'}
-              style={{
-                color: coin.zonePosition === 'at_demand' || coin.zonePosition === 'near_demand' ? '#26a69a'
-                  : coin.zonePosition === 'at_supply' || coin.zonePosition === 'near_supply' ? '#ef5350'
-                  : coin.zonePosition === 'between' ? '#f0b90b' : 'var(--dim)',
-                background: coin.zonePosition === 'at_demand' || coin.zonePosition === 'near_demand' ? 'rgba(38,166,154,.10)'
-                  : coin.zonePosition === 'at_supply' || coin.zonePosition === 'near_supply' ? 'rgba(239,83,80,.10)'
-                  : coin.zonePosition === 'between' ? 'rgba(240,185,11,.08)' : 'transparent',
-                border: `1px solid ${
-                  coin.zonePosition === 'at_demand' || coin.zonePosition === 'near_demand' ? 'rgba(38,166,154,.25)'
-                  : coin.zonePosition === 'at_supply' || coin.zonePosition === 'near_supply' ? 'rgba(239,83,80,.25)'
-                  : coin.zonePosition === 'between' ? 'rgba(240,185,11,.25)' : 'var(--border)'}`,
-              }}>
-              {zonePositionLabel(coin.zonePosition)}
+        return !loaded ? <SkeletonCell key={colId} w={72} /> : (
+          <td key={colId} className="px-2 py-2 text-center" style={{ minWidth: 88 }}>
+            <div className="flex flex-col items-center gap-0.5 leading-tight" title={coin.zoneSignalReasons.join('\n')}>
+              {coin.demandZonePrice !== null ? (
+                <span className="font-mono text-[10px] font-semibold" style={{ color: '#26a69a' }}>
+                  D {formatPrice(coin.demandZonePrice)}
+                </span>
+              ) : (
+                <span className="text-[10px]" style={{ color: 'var(--dim)' }}>D —</span>
+              )}
+              {coin.supplyZonePrice !== null ? (
+                <span className="font-mono text-[10px] font-semibold" style={{ color: '#ef5350' }}>
+                  S {formatPrice(coin.supplyZonePrice)}
+                </span>
+              ) : (
+                <span className="text-[10px]" style={{ color: 'var(--dim)' }}>S —</span>
+              )}
               <CandleAge candles={coin.zoneCandles} />
-            </span>
+            </div>
           </td>
         );
 
@@ -379,7 +398,11 @@ export const HeatmapRow = memo(function HeatmapRow({
       case 'sl':
         return !loaded ? <SkeletonCell key={colId} w={52} /> : (
           <td key={colId} className="px-2 py-2 text-right" style={{ minWidth: 72 }}>
-            <span className="font-mono text-[11px]" style={{ color: coin.stopLoss ? '#ef5350' : 'var(--dim)' }}>
+            <span
+              className="font-mono text-[11px]"
+              style={{ color: coin.stopLoss ? '#ef5350' : 'var(--dim)' }}
+              title={coin.riskRewardNote || 'SL = demand/supply zona + ATR buffer'}
+            >
               {coin.stopLoss ? `$${formatPrice(coin.stopLoss)}` : '—'}
             </span>
           </td>
@@ -388,22 +411,12 @@ export const HeatmapRow = memo(function HeatmapRow({
       case 'tp':
         return !loaded ? <SkeletonCell key={colId} w={52} /> : (
           <td key={colId} className="px-2 py-2 text-right" style={{ minWidth: 72 }}>
-            <span className="font-mono text-[11px]" style={{ color: coin.takeProfit ? '#26a69a' : 'var(--dim)' }}>
-              {coin.takeProfit ? `$${formatPrice(coin.takeProfit)}` : '—'}
-            </span>
-          </td>
-        );
-
-      case 'rr':
-        return !loaded ? <SkeletonCell key={colId} w={32} /> : (
-          <td key={colId} className="px-2 py-2 text-center" style={{ minWidth: 44 }}>
-            <span className="font-mono text-[11px]" style={{
-              color: coin.riskReward && coin.riskReward >= 2 ? '#26a69a'
-                : coin.riskReward && coin.riskReward >= 1.5 ? '#f0b90b' : 'var(--dim)',
-            }}
-              title={coin.riskRewardNote || undefined}
+            <span
+              className="font-mono text-[11px]"
+              style={{ color: coin.takeProfit ? '#26a69a' : 'var(--dim)' }}
+              title={coin.riskRewardNote || 'TP = əks zona və ya 2.5×ATR'}
             >
-              {coin.riskReward !== null ? `${coin.riskReward.toFixed(1)}` : '—'}
+              {coin.takeProfit ? `$${formatPrice(coin.takeProfit)}` : '—'}
             </span>
           </td>
         );
@@ -414,14 +427,15 @@ export const HeatmapRow = memo(function HeatmapRow({
             {coin.setupSignal !== 'NEUTRAL' ? (
               <span
                 className={`inline-block font-bold rounded px-2 py-0.5 text-[10px] whitespace-nowrap ${classifySignal(coin.setupSignal)}`}
-                title={setupTooltip}
+                title={[
+                  coin.confidence > 0 ? `Confidence: ${coin.confidence}%` : '',
+                  ...coin.confidenceReasons.slice(0, 4),
+                  setupTooltip,
+                ].filter(Boolean).join('\n')}
               >
                 {coin.reversalRisk === 'HIGH' && <span className="mr-0.5">⚠</span>}
                 {coin.setupLabel}
                 <CandleAge candles={coin.setupCandles} />
-                {coin.setupConviction > 0 && (
-                  <span className="opacity-60 ml-1">{coin.setupConviction}</span>
-                )}
               </span>
             ) : <span className="text-xs" style={{ color: 'var(--dim)' }}>—</span>}
           </td>
@@ -434,56 +448,35 @@ export const HeatmapRow = memo(function HeatmapRow({
         }
         return null;
     }
-  }, [coin, loaded, rank, rowBg, setupTooltip, t, typeStyle, visibleAnalysisTfs, activeRsiTf]);
+  }, [coin, loaded, rank, rowBg, setupTooltip, t, typeStyle, visibleAnalysisTfs, activeRsiTf, isFavorite, onToggleFavorite]);
 
   return (
     <tr
-      className={`transition-colors hover:bg-white/[0.04] cursor-pointer ${flashClass}`}
-      style={{ background: rowBg, height: 44 }}
+      className={`transition-colors row-hover cursor-pointer focus-visible:outline-2 focus-visible:outline-[#2962ff] focus-visible:-outline-offset-2 ${flashClass}`}
+      style={{ background: rowBg, height: rowHeight }}
       onClick={handleClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick();
+        }
+      }}
+      tabIndex={0}
+      role="link"
+      aria-label={coin.name}
     >
       {visibleColIds.map(colId => renderCell(colId))}
     </tr>
   );
 }, (prev, next) =>
-  prev.coin.price === next.coin.price &&
-  prev.coin.priceChange24h === next.coin.priceChange24h &&
-  prev.coin.name === next.coin.name &&
-  prev.coin.type === next.coin.type &&
-  prev.coin.rsi15m === next.coin.rsi15m &&
-  prev.coin.rsi1h === next.coin.rsi1h &&
-  prev.coin.rsi4h === next.coin.rsi4h &&
-  prev.coin.rsi1d === next.coin.rsi1d &&
-  prev.coin.macdHistogram === next.coin.macdHistogram &&
-  prev.coin.volume24h === next.coin.volume24h &&
-  prev.coin.volBuyRatios['15m'] === next.coin.volBuyRatios['15m'] &&
-  prev.coin.volBuyRatios['1h'] === next.coin.volBuyRatios['1h'] &&
-  prev.coin.volBuyRatios['4h'] === next.coin.volBuyRatios['4h'] &&
-  prev.coin.volBuyRatios['1d'] === next.coin.volBuyRatios['1d'] &&
-  prev.coin.atrPercent === next.coin.atrPercent &&
-  prev.coin.stochRsiK === next.coin.stochRsiK &&
-  prev.coin.bbPercent === next.coin.bbPercent &&
-  prev.coin.indicatorsLoaded === next.coin.indicatorsLoaded &&
-  prev.coin.trendScore === next.coin.trendScore &&
-  prev.coin.mtf15m === next.coin.mtf15m &&
-  prev.coin.mtf30m === next.coin.mtf30m &&
-  prev.coin.mtf1h === next.coin.mtf1h &&
-  prev.coin.mtf4h === next.coin.mtf4h &&
-  prev.coin.chartSignal === next.coin.chartSignal &&
-  prev.coin.researchSignal === next.coin.researchSignal &&
-  prev.coin.researchLabel === next.coin.researchLabel &&
-  prev.coin.haTrend === next.coin.haTrend &&
-  prev.coin.haConsecutive === next.coin.haConsecutive &&
-  prev.coin.setupSignal === next.coin.setupSignal &&
-  prev.coin.zoneBreakoutSignal === next.coin.zoneBreakoutSignal &&
-  prev.coin.zonePosition === next.coin.zonePosition &&
-  prev.coin.stopLoss === next.coin.stopLoss &&
-  prev.coin.takeProfit === next.coin.takeProfit &&
-  prev.coin.riskReward === next.coin.riskReward &&
-  prev.coin.superTrend === next.coin.superTrend &&
-  prev.coin.flashUp === next.coin.flashUp &&
-  prev.coin.flashDown === next.coin.flashDown &&
+  // Coins are updated immutably (changed coins get new objects, untouched
+  // ones keep their reference), so reference equality is both cheaper and
+  // safer than the old 50-field list, which silently omitted rendered fields
+  // (candle ages, reversal risk, tooltips) and let cells go stale.
+  prev.coin === next.coin &&
   prev.rank === next.rank &&
+  prev.rowHeight === next.rowHeight &&
+  prev.isFavorite === next.isFavorite &&
   prev.visibleRsiCols.join() === next.visibleRsiCols.join() &&
   prev.visibleExtraCols.join() === next.visibleExtraCols.join() &&
   prev.visibleAnalysisTfs.join() === next.visibleAnalysisTfs.join() &&

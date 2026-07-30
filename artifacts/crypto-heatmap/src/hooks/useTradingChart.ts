@@ -5,12 +5,16 @@ import {
   CandlestickSeries,
   HistogramSeries,
   LineSeries,
+  AreaSeries,
   CrosshairMode,
+  LineStyle,
+  PriceScaleMode,
   type IChartApi,
   type ISeriesApi,
+  type MouseEventParams,
 } from 'lightweight-charts';
 import type { Kline } from '../services/binanceApi';
-import { getChartKlines, INDICATOR_KLINE_LIMIT } from '../services/klineBatchApi';
+import { getChartKlines, CHART_KLINE_LIMIT } from '../services/klineBatchApi';
 import { ChartKlineWebSocket } from '../services/chartWebSocket';
 import {
   CHART_TIMEFRAMES,
@@ -21,7 +25,19 @@ import {
   type ChartTimeframe,
   type IndicatorSettings,
 } from '../types/chart';
-import { computeAllChartSeries, toChartTime } from '../utils/chartSeries';
+import { computeAllChartSeries, displayKlinesForCandles, klinesToCloseLine, toChartTime } from '../utils/chartSeries';
+
+/** TradingView-style OHLCV legend payload (crosshair-follow, falls back to last bar). */
+export interface ChartLegend {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number | null;
+  changePct: number;
+}
+
+type MainSeries = ISeriesApi<'Candlestick'> | ISeriesApi<'Line'> | ISeriesApi<'Area'>;
 
 function buildChartOptions(theme: ChartThemeColors) {
   return {
@@ -81,7 +97,7 @@ export function useTradingChart(
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
-  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const candleSeriesRef = useRef<MainSeries | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const bbUpperRef = useRef<ISeriesApi<'Line'> | null>(null);
   const bbMiddleRef = useRef<ISeriesApi<'Line'> | null>(null);
@@ -104,14 +120,29 @@ export function useTradingChart(
   const [settings, setSettings] = useState<IndicatorSettings>(DEFAULT_INDICATOR_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [legend, setLegend] = useState<ChartLegend | null>(null);
+  const [logScale, setLogScale] = useState(false);
+  const hoveringRef = useRef(false);
 
   settingsRef.current = settings;
+
+  const legendFromKline = useCallback((k: Kline | undefined): ChartLegend | null => {
+    if (!k) return null;
+    return {
+      open: k.open,
+      high: k.high,
+      low: k.low,
+      close: k.close,
+      volume: k.volume ?? null,
+      changePct: k.open > 0 ? ((k.close - k.open) / k.open) * 100 : 0,
+    };
+  }, []);
 
   const getBinanceInterval = useCallback((tf: ChartTimeframe) => {
     return CHART_TIMEFRAMES.find(t => t.key === tf)?.binance ?? '1h';
   }, []);
 
-  const removeSeriesSafe = useCallback((chart: IChartApi, ref: { current: ISeriesApi<'Line'> | ISeriesApi<'Histogram'> | ISeriesApi<'Candlestick'> | null }) => {
+  const removeSeriesSafe = useCallback((chart: IChartApi, ref: { current: ISeriesApi<'Line'> | ISeriesApi<'Histogram'> | ISeriesApi<'Candlestick'> | ISeriesApi<'Area'> | null }) => {
     if (ref.current) {
       try { chart.removeSeries(ref.current); } catch { /* */ }
       ref.current = null;
@@ -140,16 +171,42 @@ export function useTradingChart(
     const theme = chartThemeRef.current;
     const series = computeAllChartSeries(klines, s);
 
-    // --- Pane 0: Main chart ---
+    // --- Pane 0: Main chart (candles / heikin ashi / line / area) ---
     removeSeriesSafe(chart, candleSeriesRef);
-    candleSeriesRef.current = chart.addSeries(CandlestickSeries, {
-      upColor: theme.upColor,
-      downColor: theme.downColor,
-      borderVisible: false,
-      wickUpColor: theme.upColor,
-      wickDownColor: theme.downColor,
-    }, 0);
-    candleSeriesRef.current.setData(series.candles);
+    if (s.candleMode === 'line') {
+      const line = chart.addSeries(LineSeries, {
+        color: theme.lineColor,
+        lineWidth: 2,
+        priceLineVisible: true,
+        lastValueVisible: true,
+      }, 0);
+      line.setData(klinesToCloseLine(klines));
+      candleSeriesRef.current = line;
+    } else if (s.candleMode === 'area') {
+      const area = chart.addSeries(AreaSeries, {
+        lineColor: theme.lineColor,
+        lineWidth: 2,
+        topColor: theme.areaTop,
+        bottomColor: theme.areaBottom,
+      }, 0);
+      area.setData(klinesToCloseLine(klines));
+      candleSeriesRef.current = area;
+    } else {
+      const candle = chart.addSeries(CandlestickSeries, {
+        upColor: theme.upColor,
+        downColor: theme.downColor,
+        borderVisible: false,
+        wickUpColor: theme.upColor,
+        wickDownColor: theme.downColor,
+      }, 0);
+      candle.setData(series.candles);
+      candleSeriesRef.current = candle;
+    }
+
+    if (!hoveringRef.current) {
+      const src = displayKlinesForCandles(klines, s.candleMode);
+      setLegend(legendFromKline(src[src.length - 1]));
+    }
 
     removeSeriesSafe(chart, volumeSeriesRef);
     if (s.volume.enabled && series.volume.length) {
@@ -187,8 +244,23 @@ export function useTradingChart(
 
     if (s.rsi.enabled && s.rsi.panel && series.rsi.length) {
       const idx = addIndicatorPane(chart, 'rsi');
-      rsiSeriesRef.current = chart.addSeries(LineSeries, { color: theme.rsi, lineWidth: 2, title: 'RSI' }, idx);
+      rsiSeriesRef.current = chart.addSeries(LineSeries, {
+        color: theme.rsi, lineWidth: 2, title: 'RSI',
+        autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
+      }, idx);
       rsiSeriesRef.current.setData(series.rsi);
+      rsiSeriesRef.current.createPriceLine({
+        price: s.rsi.overbought, color: 'rgba(239,83,80,0.7)', lineWidth: 1,
+        lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: `OB ${s.rsi.overbought}`,
+      });
+      rsiSeriesRef.current.createPriceLine({
+        price: s.rsi.oversold, color: 'rgba(38,166,154,0.7)', lineWidth: 1,
+        lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: `OS ${s.rsi.oversold}`,
+      });
+      rsiSeriesRef.current.createPriceLine({
+        price: 50, color: 'rgba(150,150,150,0.35)', lineWidth: 1,
+        lineStyle: LineStyle.Dotted, axisLabelVisible: false, title: '',
+      });
     }
 
     if (s.macd.enabled && s.macd.panel && series.macd.histogram.length) {
@@ -203,14 +275,25 @@ export function useTradingChart(
 
     if (s.stochRsi.enabled && s.stochRsi.panel && series.stochRsi.k.length) {
       const idx = addIndicatorPane(chart, 'stoch');
-      stochKRef.current = chart.addSeries(LineSeries, { color: theme.stochK, lineWidth: 2, title: 'Stoch K' }, idx);
+      stochKRef.current = chart.addSeries(LineSeries, {
+        color: theme.stochK, lineWidth: 2, title: 'Stoch K',
+        autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
+      }, idx);
       stochKRef.current.setData(series.stochRsi.k);
+      stochKRef.current.createPriceLine({
+        price: s.stochRsi.overbought, color: 'rgba(239,83,80,0.7)', lineWidth: 1,
+        lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: `OB ${s.stochRsi.overbought}`,
+      });
+      stochKRef.current.createPriceLine({
+        price: s.stochRsi.oversold, color: 'rgba(38,166,154,0.7)', lineWidth: 1,
+        lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: `OS ${s.stochRsi.oversold}`,
+      });
       stochDRef.current = chart.addSeries(LineSeries, { color: theme.stochD, lineWidth: 1, title: 'Stoch D' }, idx);
       stochDRef.current.setData(series.stochRsi.d);
     }
 
     chart.timeScale().fitContent();
-  }, [removeSeriesSafe, clearIndicatorPanes, addIndicatorPane]);
+  }, [removeSeriesSafe, clearIndicatorPanes, addIndicatorPane, legendFromKline]);
 
   const onKlinesLoadedRef = useRef(onKlinesLoaded);
   onKlinesLoadedRef.current = onKlinesLoaded;
@@ -220,8 +303,10 @@ export function useTradingChart(
     setError(null);
     try {
       const interval = getBinanceInterval(tf);
-      const klines = await getChartKlines(assetType, sym, interval, INDICATOR_KLINE_LIMIT);
-      klinesRef.current = klines;
+      const klines = await getChartKlines(assetType, sym, interval, CHART_KLINE_LIMIT);
+      // Own copy — the fetched array is handed to onKlinesLoaded (and cached
+      // upstream); realtime updates must not mutate it behind the cache's back.
+      klinesRef.current = [...klines];
       applySeries(klines, s);
       onKlinesLoadedRef.current?.(interval, klines);
       setLoading(false);
@@ -235,29 +320,44 @@ export function useTradingChart(
     const candle = candleSeriesRef.current;
     if (!candle) return;
 
-    const time = toChartTime(kline.openTime);
-    candle.update({ time, open: kline.open, high: kline.high, low: kline.low, close: kline.close });
-
-    if (volumeSeriesRef.current) {
-      const theme = chartThemeRef.current;
-      volumeSeriesRef.current.update({
-        time,
-        value: kline.volume,
-        color: kline.close >= kline.open ? theme.volumeUp : theme.volumeDown,
-      });
-    }
-
     const klines = klinesRef.current;
     const last = klines[klines.length - 1];
     if (last && last.openTime === kline.openTime) {
       klines[klines.length - 1] = kline;
     } else if (isClosed) {
       klines.push(kline);
-      if (klines.length > 500) klines.shift();
+      if (klines.length > CHART_KLINE_LIMIT) klines.shift();
+    } else if (!last || last.openTime !== kline.openTime) {
+      klines.push(kline);
+      // This (new in-progress candle) is the branch that actually runs once
+      // per bar — without trimming here the array grows without bound.
+      if (klines.length > CHART_KLINE_LIMIT) klines.shift();
+    }
+
+    const s = settingsRef.current;
+    const display = displayKlinesForCandles(klines, s.candleMode);
+    const bar = display[display.length - 1];
+    if (!bar) return;
+
+    const time = toChartTime(bar.openTime);
+    if (s.candleMode === 'line' || s.candleMode === 'area') {
+      (candle as ISeriesApi<'Line'>).update({ time, value: bar.close });
+    } else {
+      (candle as ISeriesApi<'Candlestick'>).update({ time, open: bar.open, high: bar.high, low: bar.low, close: bar.close });
+    }
+    if (!hoveringRef.current) setLegend(legendFromKline(bar));
+
+    if (volumeSeriesRef.current) {
+      const theme = chartThemeRef.current;
+      volumeSeriesRef.current.update({
+        time,
+        value: bar.volume,
+        color: bar.close >= bar.open ? theme.volumeUp : theme.volumeDown,
+      });
     }
 
     if (isClosed) {
-      applySeries(klines, settingsRef.current);
+      applySeries(klines, s);
     }
   }, [applySeries]);
 
@@ -281,13 +381,66 @@ export function useTradingChart(
     });
     ro.observe(containerRef.current);
 
+    // TradingView-style legend: follow the crosshair, fall back to last bar.
+    const onCrosshair = (param: MouseEventParams) => {
+      const main = candleSeriesRef.current;
+      if (!main) return;
+      if (!param.time || !param.point) {
+        hoveringRef.current = false;
+        const s = settingsRef.current;
+        const src = displayKlinesForCandles(klinesRef.current, s.candleMode);
+        setLegend(legendFromKline(src[src.length - 1]));
+        return;
+      }
+      hoveringRef.current = true;
+      const sd = param.seriesData.get(main) as
+        | { open?: number; high?: number; low?: number; close?: number; value?: number }
+        | undefined;
+      if (!sd) return;
+      if (sd.open != null && sd.close != null) {
+        setLegend({
+          open: sd.open,
+          high: sd.high ?? sd.close,
+          low: sd.low ?? sd.close,
+          close: sd.close,
+          volume: null,
+          changePct: sd.open > 0 ? ((sd.close - sd.open) / sd.open) * 100 : 0,
+        });
+      } else if (sd.value != null) {
+        setLegend({ open: sd.value, high: sd.value, low: sd.value, close: sd.value, volume: null, changePct: 0 });
+      }
+    };
+    chart.subscribeCrosshairMove(onCrosshair);
+
     return () => {
+      chart.unsubscribeCrosshairMove(onCrosshair);
       ro.disconnect();
       chart.remove();
       chartRef.current = null;
       paneMapRef.current = { rsi: -1, macd: -1, stoch: -1 };
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Log price scale (TradingView "log" toggle)
+  useEffect(() => {
+    chartRef.current?.priceScale('right').applyOptions({
+      mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
+    });
+  }, [logScale]);
+
+  /** Download the current chart as PNG. */
+  const takeScreenshot = useCallback(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    try {
+      const canvas = chart.takeScreenshot();
+      const link = document.createElement('a');
+      link.download = `${symbol}-${timeframe}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch { /* screenshot unsupported */ }
+  }, [symbol, timeframe]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -301,8 +454,18 @@ export function useTradingChart(
 
   useEffect(() => {
     if (!symbol) return;
-    loadData(symbol, type, timeframe, settings);
-  }, [symbol, type, timeframe, settings, loadData]);
+    loadData(symbol, type, timeframe, settingsRef.current);
+    // `settings` is deliberately NOT a dependency: toggling an indicator is a
+    // pure client-side redraw — refetching 3000 candles per toggle blanked
+    // the chart and hammered the API.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, type, timeframe, loadData]);
+
+  useEffect(() => {
+    if (klinesRef.current.length > 0) {
+      applySeries(klinesRef.current, settings);
+    }
+  }, [settings, applySeries]);
 
   useEffect(() => {
     if (!symbol || type !== 'crypto') {
@@ -351,5 +514,9 @@ export function useTradingChart(
     updateSettings,
     loading,
     error,
+    legend,
+    logScale,
+    setLogScale,
+    takeScreenshot,
   };
 }

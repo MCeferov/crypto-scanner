@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useCallback } from 'react';
+import React, { useMemo, useEffect, useCallback, useRef } from 'react';
 import { useRoute, useLocation } from 'wouter';
 import { ArrowLeft } from 'lucide-react';
 import { useMarket } from '../context/MarketContext';
@@ -7,6 +7,7 @@ import { TradingChart } from '../components/Chart/TradingChart';
 import { CoinHeader } from '../components/CoinDetail/CoinHeader';
 import { AIAnalysisPanel } from '../components/CoinDetail/AIAnalysisPanel';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { LanguageSwitcher } from '../components/Controls/LanguageSwitcher';
 import { analyzeFromCoin } from '../services/aiAnalysis';
 import { batchKlinesFromServer, toKlineAssetRef } from '../services/klineBatchApi';
 import type { Kline } from '../services/binanceApi';
@@ -20,7 +21,7 @@ export function AssetDetailPage() {
 
   const type = (params?.type ?? '') as AssetType;
   const symbol = params?.symbol?.toUpperCase() ?? '';
-  const initialTimeframe = visibleRsiCols[0] ?? '1h';
+  const initialTimeframe = visibleRsiCols[0] ?? '1m';
 
   const asset = useMemo(
     () => coins.find(c => c.type === type && c.baseAsset.toUpperCase() === symbol) ?? null,
@@ -32,19 +33,28 @@ export function AssetDetailPage() {
     syncAssetKlines(asset.id, { [interval]: klines });
   }, [asset, syncAssetKlines]);
 
+  // Fetch fresh klines ONCE per asset id. Depending on the `asset` object
+  // itself would loop forever: syncAssetKlines produces a new coin object,
+  // which produces a new `asset`, which would re-fire this effect.
+  const fetchedForRef = useRef<string | null>(null);
+  const assetId = asset?.id ?? null;
+  const assetType = asset?.type ?? null;
   useEffect(() => {
-    if (!asset || asset.type === 'crypto') return;
+    if (!asset || !assetId || assetType === 'crypto') return;
+    if (fetchedForRef.current === assetId) return;
+    fetchedForRef.current = assetId;
     const ref = toKlineAssetRef(asset);
-    void batchKlinesFromServer([ref], ['15m', '1h', '4h'], true).then(map => {
-      const klines = map.get(asset.id);
-      if (klines) syncAssetKlines(asset.id, klines);
+    void batchKlinesFromServer([ref], ['1m', '5m', '15m', '1h', '4h'], true).then(map => {
+      const klines = map.get(assetId);
+      if (klines) syncAssetKlines(assetId, klines);
     }).catch(() => {});
-  }, [asset, syncAssetKlines]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assetId, assetType, syncAssetKlines]);
 
   const analysis = useMemo(() => {
     if (!asset || !asset.indicatorsLoaded) return null;
-    return analyzeFromCoin(asset);
-  }, [asset]);
+    return analyzeFromCoin(asset, t);
+  }, [asset, t]);
 
   useEffect(() => {
     if (type === 'crypto' && symbol) {
@@ -79,7 +89,10 @@ export function AssetDetailPage() {
           <ArrowLeft size={14} />
           {t('detail.back')}
         </button>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <LanguageSwitcher />
+          <ThemeToggle />
+        </div>
       </div>
 
       <CoinHeader coin={asset} symbol={chartSymbol} />
