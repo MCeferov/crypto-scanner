@@ -116,7 +116,7 @@ from Binance on every cold start and get the IP banned (HTTP 418).
 seconds. `/api/healthz` deliberately does not check the database, so an idle DB
 never causes a restart loop.
 
-**Secrets.** `lib/prisma/.env` holds real local credentials and is gitignored —
+**Secrets.** The repo root `.env` holds real local credentials and is gitignored —
 confirm with `git ls-files | grep .env` (only `.env.example` files should
 appear). Never set production secrets in a file; use the platform dashboard.
 
