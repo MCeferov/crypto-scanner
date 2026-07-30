@@ -1,0 +1,28 @@
+# Netlify hosts the frontend ONLY. The API cannot run here — its kline cache,
+# Binance proxy cache and rate-limit buckets are all in-process, and the SSE
+# stream runs for 30-40 s on a cold cache. Keep the API on Render (see
+# DEPLOY.md) and point this build at it with VITE_API_URL.
+[build]
+  # This is a pnpm workspace: the frontend lives in artifacts/crypto-heatmap
+  # and is the only package that gets built here.
+  command = "pnpm run build:web"
+  publish = "artifacts/crypto-heatmap/dist/public"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # --prod=false is mandatory: react, vite and tailwind live in
+  # devDependencies, so a production-only install breaks the web build.
+  PNPM_FLAGS = "--frozen-lockfile --prod=false"
+
+# SPA fallback. Without this, any path other than / is a Netlify 404 because
+# no file exists on disk for it — wouter routes client-side.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Vite fingerprints these filenames, so they can never go stale.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
