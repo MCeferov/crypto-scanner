@@ -54,7 +54,33 @@
       "Bash(node \"C:/Users/Miri/AppData/Local/Temp/claude/c--Users-Miri-Desktop-Crypto-Heatmap/207f7aa8-e20c-4912-b26e-532b5846e6f5/scratchpad/probe.mjs\")",
       "Bash(grep -rn \"from \\\\\"./app\\\\\"\\\\|from '\\\\\\\\./app'\\\\|require\\(.*app\\\\\"\\)\\\\|api-server/src/app\\\\|dist/index.mjs\\\\|dist/app\" --include=\"*.ts\" --include=\"*.mjs\" --include=\"*.js\" --include=\"*.json\" . --exclude-dir=node_modules --exclude-dir=.git)",
       "PowerShell(pnpm run build:web 2>&1)",
-      "PowerShell(pnpm run build:api 2>&1)"
+      "PowerShell(pnpm run build:api 2>&1)",
+      "WebSearch",
+      "WebFetch(domain:northflank.com)",
+      "WebFetch(domain:render.com)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Miri\\\\Desktop\\\\Crypto-Heatmap\\\\.claude\\\\skills\" -ErrorAction SilentlyContinue | ForEach-Object { Get-Content \"$\\($_.FullName\\)\\\\SKILL.md\" -ErrorAction SilentlyContinue | Select-String \"^description:\" })",
+      "Bash(pnpm dev:api > /tmp/api.log 2>&1 & *)",
+      "Bash(pnpm dev:web)",
+      "Bash(export PORT=5173)",
+      "Bash(export BASE_PATH=/)",
+      "Bash(export MSYS_NO_PATHCONV=1)",
+      "Bash(export API_PROXY_TARGET=http://localhost:8080)",
+      "Bash(curl -s http://localhost:8080/health)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(pnpm --filter @workspace/crypto-heatmap exec tsc --noEmit -p tsconfig.json)",
+      "Bash(curl -s \"http://localhost:5173/src/indicators/confluenceSignals.ts\")",
+      "Bash(curl -s \"http://localhost:5173/src/components/Chart/ChartToolbar.tsx\")",
+      "Bash(sed 's|../../../../../../../Users/Miri/Desktop/Crypto-Heatmap/artifacts/crypto-heatmap/src|./src|g' \"C:\\\\Users\\\\Miri\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Miri-Desktop-Crypto-Heatmap\\\\67803e7c-ad9f-47c6-9d7e-80726e1d70fd\\\\scratchpad\\\\test-confluence.ts\")",
+      "Bash(rm .confluence-test.tmp.ts)",
+      "Bash(MSYS_NO_PATHCONV=1 BASE_PATH=/ pnpm run build:web)",
+      "Bash(rm -f .zone-test.tmp.ts .confluence-test.tmp.ts)",
+      "Bash(curl -s \"http://localhost:5173/src/components/Chart/drawing/DrawingLayer.tsx\")",
+      "Bash(curl -s \"http://localhost:5173/src/indicators/chartZones.ts\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://localhost:5173/\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://localhost:5173/src/components/Chart/drawing/DrawingLayer.tsx\")"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }
